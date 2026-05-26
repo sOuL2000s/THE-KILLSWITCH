@@ -1,0 +1,38 @@
+# Visual Studio / .NET Core project files
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+*.config
+*.log
+*.sqlite
+*.json.user
+
+# Rider files
+.idea/
+
+# Node.js (if you were mixing with JS/TS)
+node_modules/
+
+# VS Code files
+.vscode/*.log
+.vscode/*.seed
+.vscode/*.code-workspace
+.vscode/launch.json # If you customize debugging settings and don't want to share
+.vscode/tasks.json   # If you customize tasks and don't want to share
+
+# Package files
+*.nupkg
+*.snk
+
+# Build results
+publish/
+
+# Other temporary files
+*~
+*.bak
+*.swp
+*.tmp
+*.userprefs
