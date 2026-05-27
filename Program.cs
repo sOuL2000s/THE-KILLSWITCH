@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
+using System.ComponentModel; // Added for Win32Exception
 
 public class ProcessManager
 {
@@ -31,7 +32,8 @@ public class ProcessManager
             Console.WriteLine("7. Graceful System Shutdown");
             Console.WriteLine("8. KILL ALL USER PROCESSES & RESTART SYSTEM (EXTREME CAUTION!)");
             Console.WriteLine("9. KILL ALL USER PROCESSES & SHUTDOWN SYSTEM (EXTREME CAUTION!)");
-            Console.WriteLine("10. Exit");
+            Console.WriteLine("10. Kill All Processes (Advanced)"); // NEW POSITION
+            Console.WriteLine("11. Exit"); // NEW POSITION
             Console.Write("Enter your choice: ");
 
             string choice = (Console.ReadLine() ?? string.Empty).Trim(); // Improved: handle null and whitespace
@@ -76,7 +78,10 @@ public class ProcessManager
                 case "9":
                     KillAllUserProcessesAndShutdown();
                     return; // Application exits after initiating shutdown
-                case "10":
+                case "10": // NEW CASE POSITION
+                    KillAllProcessesSubMenu();
+                    break;
+                case "11": // NEW CASE POSITION
                     Console.WriteLine("Exiting Process Manager. Goodbye!");
                     return;
                 default:
@@ -89,6 +94,48 @@ public class ProcessManager
             Console.Clear();
         }
     }
+
+    /// <summary>
+    /// Displays a sub-menu for advanced process killing options.
+    /// </summary>
+    public static void KillAllProcessesSubMenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n--- Kill All Processes (Advanced) ---");
+            Console.WriteLine("1. Kill All Foreground Processes (has GUI)");
+            Console.WriteLine("2. Kill All Background Processes (no GUI)");
+            Console.WriteLine("3. Kill ALL User Processes (Foreground & Background)");
+            Console.WriteLine("4. Back to Main Menu");
+            Console.Write("Enter your choice: ");
+
+            string subChoice = (Console.ReadLine() ?? string.Empty).Trim();
+            Console.WriteLine();
+
+            switch (subChoice)
+            {
+                case "1":
+                    KillProcessesByWindowStatus(isForeground: true);
+                    break;
+                case "2":
+                    KillProcessesByWindowStatus(isForeground: false);
+                    break;
+                case "3":
+                    // This method already handles "all" user processes
+                    KillAllNonCriticalUserProcesses();
+                    break;
+                case "4":
+                    return; // Exit sub-menu
+                default:
+                    Console.WriteLine("Invalid choice. Please try again.");
+                    break;
+            }
+            Console.WriteLine("\nPress any key to continue...");
+            Console.ReadKey();
+            Console.Clear(); // Clear sub-menu after operation, before re-displaying main menu
+        }
+    }
+
 
     /// <summary>
     /// Lists all running processes with their ID, Name, and Memory Usage.
@@ -347,35 +394,40 @@ public class ProcessManager
     }
 
     /// <summary>
-    /// Attempts to kill all non-critical processes belonging to the current user's session.
-    /// This is an EXTREMELY DANGEROUS operation and can lead to data loss or system instability.
+    /// Attempts to kill all non-critical processes belonging to the current user's session,
+    /// filtered by whether they have a main window (foreground) or not (background).
     /// </summary>
+    /// <param name="isForeground">True to target foreground processes, false to target background processes. If null, targets all user processes.</param>
     /// <returns>True if the user confirmed the action and killing started, false otherwise.</returns>
-    private static bool KillAllNonCriticalUserProcesses()
+    private static bool KillProcessesByWindowStatus(bool? isForeground)
     {
+        string targetType = isForeground switch
+        {
+            true => "Foreground",
+            false => "Background",
+            null => "ALL",
+        };
+
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("\n!!! EXTREME CAUTION: You are about to kill almost all processes associated with your user session. !!!");
-        Console.WriteLine("This will likely close ALL open applications, including this one, and may lead to data loss.");
-        Console.WriteLine("It could also cause temporary system instability before a restart/shutdown.");
+        Console.WriteLine($"\n!!! CAUTION: You are about to kill ALL {targetType} processes associated with your user session. !!!");
+        Console.WriteLine("This will likely close ALL open applications of this type and may lead to data loss.");
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.Write("Are you absolutely sure you want to proceed with killing ALL user processes? (type 'YES' to confirm): ");
+        Console.Write($"Are you absolutely sure you want to proceed with killing ALL {targetType} user processes? (type 'YES' to confirm): ");
         Console.ResetColor();
 
         if ((Console.ReadLine() ?? string.Empty).ToUpper() != "YES")
         {
-            Console.WriteLine("Kill all processes operation cancelled by user.");
+            Console.WriteLine($"Kill all {targetType} processes operation cancelled by user.");
             return false;
         }
 
-        Console.WriteLine("\nAttempting to kill all non-critical user processes...");
+        Console.WriteLine($"\nAttempting to kill all non-critical {targetType} user processes...");
 
         int currentSessionId = Process.GetCurrentProcess().SessionId;
-        string currentProcessName = Process.GetCurrentProcess().ProcessName;
         int currentProcessId = Process.GetCurrentProcess().Id;
 
         // Blacklist of processes that are typically essential system components or
         // processes that are too critical to be killed even within a user session
-        // without almost guaranteed BSOD or unrecoverable state.
         string[] criticalSystemProcessesToSkip = new string[]
         {
             "smss",     // Session Manager Subsystem (CRITICAL)
@@ -383,31 +435,24 @@ public class ProcessManager
             "wininit",  // Windows Start-up Application (CRITICAL)
             "services", // Services Control Manager (CRITICAL)
             "lsass",    // Local Security Authority Process (CRITICAL)
-            // More could be added, but these are the most fundamental that cause instant crashes.
-            // explorer.exe and dwm.exe are considered killable for this extreme option,
-            // though it will make the desktop disappear.
         };
 
-        foreach (var p in Process.GetProcesses())
+        var processesToTarget = Process.GetProcesses()
+                                        .Where(p => p.SessionId == currentSessionId && p.Id != currentProcessId)
+                                        .Where(p => !criticalSystemProcessesToSkip.Any(critName => p.ProcessName.Equals(critName, StringComparison.OrdinalIgnoreCase)))
+                                        .Where(p => isForeground == null || (isForeground.Value == !string.IsNullOrEmpty(p.MainWindowTitle)))
+                                        .ToList(); // To avoid issues if process list changes during iteration
+
+        if (!processesToTarget.Any())
+        {
+            Console.WriteLine($"No non-critical {targetType} processes found in your session to kill.");
+            return false;
+        }
+
+        foreach (var p in processesToTarget)
         {
             try
             {
-                // Skip processes not in current user's interactive session
-                if (p.SessionId != currentSessionId) continue;
-
-                // Skip this application itself (to allow it to finish its job)
-                if (p.Id == currentProcessId) continue;
-                // If a new instance was spawned with the same name, we might kill it.
-                // This is less common but possible if currentProcessName is used too broadly.
-                // Using p.Id is more precise.
-
-                // Skip known critical system processes if they somehow ended up in the user session
-                if (criticalSystemProcessesToSkip.Any(critName => p.ProcessName.Equals(critName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    Console.WriteLine($"  -> Skipping critical system process: {p.ProcessName} (ID: {p.Id})");
-                    continue;
-                }
-
                 Console.WriteLine($"  -> Attempting to kill process: {p.ProcessName} (ID: {p.Id})");
                 p.Kill();
                 p.WaitForExit(2000); // Wait up to 2 seconds for each process to exit
@@ -420,7 +465,7 @@ public class ProcessManager
                     Console.WriteLine($"     Process {p.Id} did not exit after 2 seconds.");
                 }
             }
-            catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 5)
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 5) // Access Denied
             {
                 Console.WriteLine($"     Access Denied: Cannot kill process {p.ProcessName} (ID: {p.Id}). Requires higher privilege or is protected.");
             }
@@ -434,8 +479,20 @@ public class ProcessManager
                 Console.WriteLine($"     Error killing process {p.ProcessName} (ID: {p.Id}): {ex.Message}");
             }
         }
-        Console.WriteLine("\nFinished attempting to kill non-critical user processes.");
+        Console.WriteLine($"\nFinished attempting to kill non-critical {targetType} user processes.");
         return true;
+    }
+
+    /// <summary>
+    /// Attempts to kill all non-critical processes belonging to the current user's session.
+    /// This is an EXTREMELY DANGEROUS operation and can lead to data loss or system instability.
+    /// This method is now a wrapper around the more generic KillProcessesByWindowStatus for consistency.
+    /// </summary>
+    /// <returns>True if the user confirmed the action and killing started, false otherwise.</returns>
+    private static bool KillAllNonCriticalUserProcesses()
+    {
+        // Calling the generic method with null for isForeground to target all
+        return KillProcessesByWindowStatus(isForeground: null);
     }
 
     /// <summary>
@@ -449,7 +506,24 @@ public class ProcessManager
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("\nInitiating system restart (this window will close)...");
             Console.ResetColor();
-            Process.Start("shutdown.exe", "/r /t 0"); // /r = restart, /t 0 = immediate
+            try
+            {
+                var psi = new ProcessStartInfo("shutdown.exe", "/r /t 0")
+                {
+                    UseShellExecute = true,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+                Thread.Sleep(2000); // Give shutdown command more time to register
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 5)
+            {
+                Console.WriteLine("Error: Access Denied. Cannot initiate system restart. Run the application as Administrator.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initiating system restart: {ex.Message}");
+            }
         }
     }
 
@@ -464,7 +538,24 @@ public class ProcessManager
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("\nInitiating system shutdown (this window will close)...");
             Console.ResetColor();
-            Process.Start("shutdown.exe", "/s /t 0"); // /s = shutdown, /t 0 = immediate
+            try
+            {
+                var psi = new ProcessStartInfo("shutdown.exe", "/s /t 0")
+                {
+                    UseShellExecute = true,
+                    CreateNoWindow = true
+                };
+                Process.Start(psi);
+                Thread.Sleep(2000); // Give shutdown command more time to register
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 5)
+            {
+                Console.WriteLine("Error: Access Denied. Cannot initiate system shutdown. Run the application as Administrator.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initiating system shutdown: {ex.Message}");
+            }
         }
     }
 
@@ -478,8 +569,24 @@ public class ProcessManager
         Console.WriteLine("\nInitiating a graceful system restart (this window will close)...");
         Console.WriteLine("All applications will be given a chance to save their work and close.");
         Console.ResetColor();
-        Process.Start("shutdown.exe", "/r /t 0"); // /r = restart, /t 0 = immediate
-        Thread.Sleep(500); // Give shutdown command a moment to register
+        try
+        {
+            var psi = new ProcessStartInfo("shutdown.exe", "/r /t 0")
+            {
+                UseShellExecute = true,
+                CreateNoWindow = true
+            };
+            Process.Start(psi);
+            Thread.Sleep(2000); // Give shutdown command more time to register
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 5)
+        {
+            Console.WriteLine("Error: Access Denied. Cannot initiate system restart. Run the application as Administrator.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initiating system restart: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -492,7 +599,23 @@ public class ProcessManager
         Console.WriteLine("\nInitiating a graceful system shutdown (this window will close)...");
         Console.WriteLine("All applications will be given a chance to save their work and close.");
         Console.ResetColor();
-        Process.Start("shutdown.exe", "/s /t 0"); // /s = shutdown, /t 0 = immediate
-        Thread.Sleep(500); // Give shutdown command a moment to register
+        try
+        {
+            var psi = new ProcessStartInfo("shutdown.exe", "/s /t 0")
+            {
+                UseShellExecute = true,
+                CreateNoWindow = true
+            };
+            Process.Start(psi);
+            Thread.Sleep(2000); // Give shutdown command more time to register
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 5)
+        {
+            Console.WriteLine("Error: Access Denied. Cannot initiate system shutdown. Run the application as Administrator.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initiating system shutdown: {ex.Message}");
+        }
     }
 }

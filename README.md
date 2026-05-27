@@ -5,7 +5,7 @@ This is a console-based Windows application built with C# and .NET that provides
 **⚠️ IMPORTANT SAFETY WARNINGS ⚠️**
 
 *   **Killing critical system processes (e.g., `explorer.exe`, `csrss.exe`) can lead to system instability, crashes, or require a reboot.** Use the killing features with extreme caution.
-*   This application requires **Administrator privileges** to effectively list and terminate most system processes.
+*   This application requires **Administrator privileges** to effectively list and terminate most system processes and to initiate system shutdowns/restarts.
 
 ## Features
 
@@ -14,6 +14,13 @@ This is a console-based Windows application built with C# and .NET that provides
 *   List processes identified as "background" (those without a main window).
 *   Terminate a process by its Process ID.
 *   Terminate all processes with a given name.
+*   **Advanced Kill Options**: A sub-menu to kill:
+    *   All foreground processes (with a GUI).
+    *   All background processes (without a GUI).
+    *   ALL non-critical user processes (both foreground and background).
+*   Graceful System Restart.
+*   Graceful System Shutdown.
+*   **Extreme Options**: Kill all user processes then Restart/Shutdown the system.
 
 ## Getting Started
 
@@ -38,7 +45,7 @@ To build and run this application from source, you need:
     ```bash
     dotnet run
     ```
-    *Note: For full functionality, especially killing processes, you might need to launch VS Code itself as an Administrator or run the published executable as Administrator.*
+    *Note: For full functionality, especially killing processes and system control, you **must** launch VS Code itself as an Administrator or run the published executable as Administrator.*
 
 ### Building a Standalone Executable
 
@@ -53,7 +60,7 @@ To create a single `.exe` file that can be run on any 64-bit Windows machine (wi
 
 ### Running the Published Executable
 
-1.  Navigate to the output folder: `ProcessManagerApp/bin/Release/netX.0/win-x64/publish/` (replace `netX.0` with your .NET version, e.g., `net8.0`).
+1.  Navigate to the output folder: `ProcessManagerApp/bin/Release/net8.0/win-x64/publish/`.
 2.  **Right-click on `ProcessManagerApp.exe` and select "Run as administrator".** This is essential for the application to function correctly.
 
 ## Usage
@@ -70,13 +77,17 @@ Choose an option:
 3. List background processes
 4. Kill a process by ID
 5. Kill processes by Name
-6. Exit
+6. Graceful System Restart
+7. Graceful System Shutdown
+8. KILL ALL USER PROCESSES & RESTART SYSTEM (EXTREME CAUTION!)
+9. KILL ALL USER PROCESSES & SHUTDOWN SYSTEM (EXTREME CAUTION!)
+10. Kill All Processes (Advanced)
+11. Exit
 Enter your choice:
 ```
 
-Follow the prompts to interact with the process manager.
+Select `10` for the "Kill All Processes (Advanced)" sub-menu. Follow the prompts to interact with the process manager.
 
 ## Contributing
 
 If you'd like to contribute, please fork the repository and use a feature branch. Pull requests are welcome!
-
