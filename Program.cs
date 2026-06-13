@@ -63,7 +63,7 @@ public class ProcessManager
                     break;
                 case "5":
                     Console.Write("Enter the Process Name to kill: ");
-                    string pName = Console.ReadLine();
+                    string pName = Console.ReadLine() ?? string.Empty;
                     KillProcessesByName(pName);
                     break;
                 case "6":

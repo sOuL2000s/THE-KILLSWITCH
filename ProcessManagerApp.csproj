@@ -8,4 +8,10 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="KillSwitch-MiNi\**" />
+    <EmbeddedResource Remove="KillSwitch-MiNi\**" />
+    <None Remove="KillSwitch-MiNi\**" />
+  </ItemGroup>
+
 </Project>
